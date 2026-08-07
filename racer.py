@@ -26,6 +26,11 @@ enemyCar = pygame.transform.scale(enemyCar, (100, 160))
 carimage = pygame.image.load("car.png")
 carimage = pygame.transform.scale(carimage, (90, 150))
 
+def things_dodged(count):
+    font=pygame.font.SysFont(None,25)
+    text=font.render("Score:"+str(count),True,white)
+    gameDisplay.blit(text,(0,0))
+
 def things(thingx, thingy):
     gameDisplay.blit(enemyCar, (thingx, thingy))
 
@@ -60,8 +65,10 @@ def game_loop():
 
     thing_startx = random.randrange(0, display_width - enemy_width)
     thing_starty = -150
-    thing_speed = 7
-   
+    thing_speed = 4
+    
+    dodged=0
+    
     gameExit=False
     while not gameExit:
         for event in pygame.event.get():
@@ -83,11 +90,15 @@ def game_loop():
 
         gameDisplay.fill(black)
         car(x,y)
+        things_dodged(dodged)
         things(thing_startx, thing_starty)
         thing_starty += thing_speed
         if thing_starty > display_height:
             thing_starty = -150
             thing_startx = random.randrange(0, display_width - enemy_width)
+            dodged+=1
+            thing_speed+=1
+            
 
         if x>display_width-car_width or x<0:
             crash()
