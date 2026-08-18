@@ -26,6 +26,8 @@ enemyCar = pygame.transform.scale(enemyCar, (100, 160))
 carimage = pygame.image.load("car.png")
 carimage = pygame.transform.scale(carimage, (90, 150))
 
+road = pygame.image.load("road.png")
+
 def things_dodged(count):
     font=pygame.font.SysFont(None,25)
     text=font.render("Score:"+str(count),True,white)
@@ -63,14 +65,24 @@ def game_loop():
     x=(display_width*0.45)
     y=(display_height*0.8)
 
+    road_left = 170
+    road_right = 850
+
     thing_startx = random.randrange(0, display_width - enemy_width)
     thing_starty = -150
     thing_speed = 4
+
+    background_y = 0
+    road_speed = 5
     
     dodged=0
     
     gameExit=False
     while not gameExit:
+        background_y += road_speed
+        if background_y >= display_height:
+            background_y = 0
+            
         for event in pygame.event.get():
             if event.type ==pygame.QUIT:
                 pygame.quit()
@@ -87,17 +99,29 @@ def game_loop():
                     x_change = 0
 
         x+=x_change
+        if x < road_left:
+            x = road_left
 
-        gameDisplay.fill(black)
+        if x > road_right - car_width:
+            x = road_right - car_width
+
+        gameDisplay.blit(road, (0, background_y))
+        gameDisplay.blit(road, (0, background_y - display_height))
+
         car(x,y)
+        
         things_dodged(dodged)
         things(thing_startx, thing_starty)
         thing_starty += thing_speed
+
+
+        
         if thing_starty > display_height:
             thing_starty = -150
-            thing_startx = random.randrange(0, display_width - enemy_width)
+            thing_startx = random.randrange(road_left, road_right - enemy_width)
             dodged+=1
-            thing_speed+=1
+            thing_speed = 7 + dodged //10
+            road_speed = 5 + dodged // 10
             
 
         if x>display_width-car_width or x<0:
@@ -114,6 +138,7 @@ def game_loop():
 
                 print("Enemy Top:", thing_starty)
                 print("Enemy Bottom:", thing_starty + enemy_height)
+                print("Speed of Car:",thing_speed)
                 crash()
 
                 
