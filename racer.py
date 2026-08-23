@@ -20,10 +20,14 @@ enemy_height = 160
 black=(0,0,0)
 white=(255,255,255)
 
-enemyCar = pygame.image.load("enemycar.png")
+
+enemyCar = pygame.image.load("Enemy1.png")
 enemyCar = pygame.transform.scale(enemyCar, (100, 160))
 
-carimage = pygame.image.load("car.png")
+enemyCar2 = pygame.image.load("Enemy2.png")
+enemyCar2 = pygame.transform.scale(enemyCar2, (100, 160))
+
+carimage = pygame.image.load("User.png")
 carimage = pygame.transform.scale(carimage, (90, 150))
 
 road = pygame.image.load("road.png")
@@ -33,8 +37,8 @@ def things_dodged(count):
     text=font.render("Score:"+str(count),True,white)
     gameDisplay.blit(text,(0,0))
 
-def things(thingx, thingy):
-    gameDisplay.blit(enemyCar, (thingx, thingy))
+def things(thingx, thingy, enemy):
+    gameDisplay.blit(enemy, (thingx, thingy))
 
 def text_objects(text,font):
     textSurface=font.render(text,True,white)
@@ -72,10 +76,17 @@ def game_loop():
     thing_starty = -150
     thing_speed = 4
 
+    thing2_startx = random.randrange(road_left, road_right - enemy_width)
+    thing2_starty = -400
+    thing2_speed = 4
+
     background_y = 0
     road_speed = 5
     
     dodged=0
+
+    while abs(thing2_startx - thing_startx) < enemy_width + 50:
+        thing2_startx = random.randrange(road_left, road_right - enemy_width)
     
     gameExit=False
     while not gameExit:
@@ -111,17 +122,33 @@ def game_loop():
         car(x,y)
         
         things_dodged(dodged)
-        things(thing_startx, thing_starty)
+        things(thing_startx, thing_starty, enemyCar)
+        things(thing2_startx, thing2_starty, enemyCar2)
         thing_starty += thing_speed
+        thing2_starty += thing2_speed
 
 
         
         if thing_starty > display_height:
             thing_starty = -150
             thing_startx = random.randrange(road_left, road_right - enemy_width)
+
+            while abs(thing_startx - thing2_startx) < enemy_width + 50:
+                thing_startx = random.randrange(road_left, road_right - enemy_width)
+            
             dodged+=1
             thing_speed = 7 + dodged //10
             road_speed = 5 + dodged // 10
+
+        if thing2_starty > display_height:
+            thing2_starty = -400
+            thing2_startx = random.randrange(road_left, road_right - enemy_width)
+
+            while abs(thing2_startx - thing_startx) < enemy_width + 50:
+                thing2_startx = random.randrange(road_left, road_right - enemy_width)
+
+            dodged+=0.5
+        
             
 
         if x>display_width-car_width or x<0:
@@ -140,6 +167,20 @@ def game_loop():
                 print("Enemy Bottom:", thing_starty + enemy_height)
                 print("Speed of Car:",thing_speed)
                 crash()
+
+            if y < thing2_starty + enemy_height:
+
+                if x > thing2_startx and x < thing2_startx + enemy_width or x + car_width > thing2_startx and x + car_width < thing2_startx + enemy_width:
+                    print("x crossover - Enemy 2")
+                    print("Player Top:", y)
+                    print("Player Bottom:", y + 150)
+
+                    print("Enemy 2 Top:", thing2_starty)
+                    print("Enemy 2 Bottom:", thing2_starty + enemy_height)
+
+                    print("Speed of Car:", thing2_speed)
+
+                    crash()
 
                 
         pygame.display.update()
