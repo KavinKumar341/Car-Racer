@@ -19,7 +19,7 @@ enemy_height = 160
 
 black=(0,0,0)
 white=(255,255,255)
-
+red=(255,0,0)
 
 enemyCar = pygame.image.load("Enemy1.png")
 enemyCar = pygame.transform.scale(enemyCar, (100, 160))
@@ -31,6 +31,8 @@ carimage = pygame.image.load("User.png")
 carimage = pygame.transform.scale(carimage, (90, 150))
 
 road = pygame.image.load("road.png")
+
+highest_score = 0
 
 def things_dodged(count):
     font=pygame.font.SysFont(None,25)
@@ -53,12 +55,113 @@ def display_message(text):
     
     pygame.display.update()
     
-    time.sleep(2)
+    
 
-    game_loop()
+def crash(score):
+    global highest_score
 
-def crash():
-    display_message('You Have Been Crashed!!!')
+    if score > highest_score:
+        highest_score = score
+
+    while True:
+        for event in pygame.event.get():
+
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                quit()
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_x, mouse_y = pygame.mouse.get_pos()
+
+                if 350 <= mouse_x <= 650 and 400 <= mouse_y <= 470:
+                    return True
+
+        gameDisplay.fill(black)
+
+        large_font = pygame.font.Font('freesansbold.ttf', 70)
+
+        game_over = large_font.render(
+            "GAME OVER", True, red
+        )
+
+        gameDisplay.blit(
+            game_over,
+            (display_width / 2 - 180, 120)
+        )
+
+        score_font = pygame.font.SysFont(None, 40)
+
+        score_text = score_font.render(
+            "Score: " + str(score),
+            True,
+            white
+        )
+
+        gameDisplay.blit(
+            score_text,
+            (400, 230)
+        )
+
+        high_text = score_font.render(
+            "Highest Score: " + str(highest_score),
+            True,
+            white
+        )
+
+        gameDisplay.blit(
+            high_text,
+            (350, 280)
+        )
+
+        # PLAY AGAIN BUTTON
+
+        button_rect = pygame.Rect(350, 400, 300, 70)
+
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+
+        # Change button when mouse is over it
+        if button_rect.collidepoint(mouse_x, mouse_y):
+            button_color = (0, 255, 0)
+        else:
+            button_color = (0, 150, 0)
+
+        # Draw button
+        pygame.draw.rect(
+            gameDisplay,
+            button_color,
+            button_rect,
+            border_radius=15
+        )
+
+        # Button border
+        pygame.draw.rect(
+            gameDisplay,
+            white,
+            button_rect,
+            3,
+            border_radius=15
+        )
+
+        # Button text
+        button_font = pygame.font.SysFont(None, 40)
+
+        button_text = button_font.render(
+            "PLAY AGAIN",
+            True,
+            white
+        )
+
+        button_text_rect = button_text.get_rect(
+            center=button_rect.center
+        )
+
+        gameDisplay.blit(
+            button_text,
+            button_text_rect
+        )
+
+        pygame.display.update()
+        clock.tick(60)
 
 def car(x,y):
     gameDisplay.blit(carimage,(x,y))
@@ -147,12 +250,13 @@ def game_loop():
             while abs(thing2_startx - thing_startx) < enemy_width + 50:
                 thing2_startx = random.randrange(road_left, road_right - enemy_width)
 
-            dodged+=0.5
+            dodged+=1
         
             
 
         if x>display_width-car_width or x<0:
-            crash()
+            crash(dodged)
+            return
 
         if y<thing_starty+enemy_height:
 
@@ -166,7 +270,8 @@ def game_loop():
                 print("Enemy Top:", thing_starty)
                 print("Enemy Bottom:", thing_starty + enemy_height)
                 print("Speed of Car:",thing_speed)
-                crash()
+                crash(dodged)
+                return
 
             if y < thing2_starty + enemy_height:
 
@@ -180,14 +285,16 @@ def game_loop():
 
                     print("Speed of Car:", thing2_speed)
 
-                    crash()
+                    crash(dodged)
+                    return
 
                 
         pygame.display.update()
         clock.tick(60)
         
+while True:
+    game_loop()
 
 
-game_loop()
 pygame.quit()
 quit()
