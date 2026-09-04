@@ -1,6 +1,10 @@
+
 import pygame
 import time
 import random
+import cv2
+import mediapipe as mp
+import threading
 
 pygame.init()
 
@@ -14,6 +18,7 @@ clock = pygame.time.Clock()
 
 enemy_width = 100
 enemy_height = 160
+
 
 black = (0, 0, 0)
 white = (255, 255, 255)
@@ -32,6 +37,88 @@ road = pygame.image.load("road.png")
 
 highest_score = 0
 
+# MEDIAPIPE SETUP
+HandLandmarker = mp.tasks.vision.HandLandmarker
+HandLandmarkerOptions = mp.tasks.vision.HandLandmarkerOptions
+BaseOptions = mp.tasks.BaseOptions
+RunningMode = mp.tasks.vision.RunningMode
+
+options = HandLandmarkerOptions(
+    base_options=BaseOptions(
+        model_asset_path="hand_landmarker.task"
+    ),
+    running_mode=RunningMode.IMAGE,
+    num_hands=1
+)
+
+landmarker = HandLandmarker.create_from_options(options)
+
+# WEBCAM SETUP
+cap = cv2.VideoCapture(0)
+
+# Lower camera resolution to reduce CPU usage
+
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+
+
+# Keep only the latest camera frame
+
+cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+# CAMERA VARIABLES
+
+# Latest frame received from camera
+
+latest_frame = None
+
+
+# Controls whether camera thread keeps running
+
+camera_running = True
+
+
+# -1 = left
+#  0 = stop
+#  1 = right
+
+hand_direction = 0
+
+# CAMERA THREAD
+# Camera runs separately from the Pygame game loop
+
+def camera_loop():
+
+    global latest_frame
+    global camera_running
+
+    while camera_running:
+
+        success, frame = cap.read()
+
+        if success:
+
+            # Flip camera
+
+            frame = cv2.flip(frame, 1)
+
+            # Store newest frame
+
+            latest_frame = frame
+
+
+
+# Start camera thread
+
+camera_thread = threading.Thread(
+    target=camera_loop,
+    daemon=True
+)
+
+camera_thread.start()
+
+
+# GAME FUNCTIONS
 
 def things_dodged(count):
     font = pygame.font.SysFont(None, 25)
@@ -67,13 +154,24 @@ def crash(score):
         for event in pygame.event.get():
 
             if event.type == pygame.QUIT:
+                global camera_running
+
+                camera_running = False
+
+                cap.release()
+
+                landmarker.close()
+
                 pygame.quit()
+
                 quit()
 
             if event.type == pygame.MOUSEBUTTONDOWN:
+
                 mouse_x, mouse_y = pygame.mouse.get_pos()
 
                 if 350 <= mouse_x <= 650 and 400 <= mouse_y <= 470:
+
                     return True
 
         gameDisplay.fill(black)
@@ -112,6 +210,7 @@ def crash(score):
             high_text,
             (350, 280)
         )
+        # PLAY AGAIN BUTTON
 
         button_rect = pygame.Rect(350, 400, 300, 70)
 
@@ -161,12 +260,15 @@ def crash(score):
 def car(x, y):
     gameDisplay.blit(carimage, (x, y))
 
-
+# GAME LOOP
 def game_loop():
 
-    x_change = 0
-    x = display_width * 0.45
-    y = display_height * 0.8
+    global hand_direction
+
+    x_change=0
+    x=(display_width*0.45)
+    y=(display_height*0.8)
+
 
     road_left = 170
     road_right = 850
@@ -179,167 +281,315 @@ def game_loop():
     thing_starty = -150
     thing_speed = 4
 
+
     thing2_startx = random.randrange(
         road_left,
         road_right - enemy_width
     )
-
     thing2_starty = -400
     thing2_speed = 4
+    background_y = 0
+    road_speed = 5
+    dodged=0
+    # MEDIAPIPE DETECTION TIMING
 
-    while abs(thing2_startx - thing_startx) < enemy_width + 50:
+    last_detection_time = 0
+
+    # Detect hand approximately 12 times per second
+
+    detection_interval = 1 / 12
+    # PREVENT ENEMY OVERLAP
+    while abs(
+        thing2_startx - thing_startx
+    ) < enemy_width + 50:
 
         thing2_startx = random.randrange(
             road_left,
             road_right - enemy_width
         )
-
-    background_y = 0
-    road_speed = 5
-
-    dodged = 0
-
-    gameExit = False
-
+    gameExit=False
     while not gameExit:
 
-        background_y += road_speed
+        # HAND DETECTION
+        current_time = time.time()
+        if (
+            current_time - last_detection_time
+            >= detection_interval
+        ):
 
-        if background_y >= display_height:
-            background_y = 0
+            last_detection_time = current_time
 
+            frame = latest_frame
+            if frame is not None:
+                # Convert BGR → RGB
+
+                rgb = cv2.cvtColor(
+                    frame,
+                    cv2.COLOR_BGR2RGB
+                )
+                # Convert to MediaPipe image
+
+                mp_image = mp.Image(
+                    image_format=mp.ImageFormat.SRGB,
+                    data=rgb
+                )
+                # Detect hand
+
+                result = landmarker.detect(
+                    mp_image
+                )
+                # HAND DETECTED
+                if result.hand_landmarks:
+
+                    hand = result.hand_landmarks[0]
+                    wrist = hand[0]
+                    hand_x = wrist.x
+                    # LEFT
+
+                    if hand_x < 0.4:
+
+                        hand_direction = -1
+                    # RIGHT
+
+                    elif hand_x > 0.6:
+
+                        hand_direction = 1
+                    # CENTER
+
+                    else:
+
+                        hand_direction = 0
+                # NO HAND
+                else:
+                    hand_direction = 0
+
+        # KEYBOARD CONTROL
+
+
+        # Define keyboard direction
+
+        keyboard_direction = 0
         for event in pygame.event.get():
 
             if event.type == pygame.QUIT:
-                pygame.quit()
-                quit()
 
+                camera_running = False
+
+                cap.release()
+
+                landmarker.close()
+
+                pygame.quit()
+
+                quit()
             if event.type == pygame.KEYDOWN:
 
                 if event.key == pygame.K_a:
-                    x_change = -5
+
+                    keyboard_direction = -1
 
                 elif event.key == pygame.K_d:
-                    x_change = 5
 
+                    keyboard_direction = 1
             if event.type == pygame.KEYUP:
 
-                if event.key == pygame.K_a or event.key == pygame.K_d:
-                    x_change = 0
+                if (
+                    event.key == pygame.K_a
+                    or event.key == pygame.K_d
+                ):
+
+                    keyboard_direction = 0
+        # MOVEMENT CONTROL
+
+        if keyboard_direction != 0:
+
+            x_change = keyboard_direction * 5
+        else:
+
+            x_change = hand_direction * 5
+        # CAR MOVEMENT
 
         x += x_change
-
         if x < road_left:
+
             x = road_left
-
         if x > road_right - car_width:
-            x = road_right - car_width
 
+            x = road_right - car_width
+        # ROAD MOVEMENT
+
+        background_y += road_speed
+        if background_y >= display_height:
+
+            background_y = 0
         gameDisplay.blit(
             road,
             (0, background_y)
         )
-
         gameDisplay.blit(
             road,
             (0, background_y - display_height)
         )
+        # DRAW CAR
 
-        car(x, y)
+        car(x,y)
+        # SCORE
 
         things_dodged(dodged)
+        # ENEMY CARS
 
         things(
             thing_startx,
             thing_starty,
             enemyCar
         )
-
         things(
             thing2_startx,
             thing2_starty,
             enemyCar2
         )
+        # MOVE ENEMY CARS
 
         thing_starty += thing_speed
+
         thing2_starty += thing2_speed
-
-        player_rect = pygame.Rect(
-            x,
-            y,
-            car_width,
-            150
-        )
-
-        enemy1_rect = pygame.Rect(
-            thing_startx,
-            thing_starty,
-            enemy_width,
-            enemy_height
-        )
-
-        enemy2_rect = pygame.Rect(
-            thing2_startx,
-            thing2_starty,
-            enemy_width,
-            enemy_height
-        )
-
-        if player_rect.colliderect(enemy1_rect):
-            crash(dodged)
-            return
-
-        if player_rect.colliderect(enemy2_rect):
-            crash(dodged)
-            return
+        # ENEMY 1 RESET
 
         if thing_starty > display_height:
 
             thing_starty = -150
-
             thing_startx = random.randrange(
                 road_left,
                 road_right - enemy_width
             )
-
-            while abs(thing_startx - thing2_startx) < enemy_width + 50:
+            while abs(
+                thing_startx - thing2_startx
+            ) < enemy_width + 50:
 
                 thing_startx = random.randrange(
                     road_left,
                     road_right - enemy_width
                 )
-
             dodged += 1
-
             thing_speed = 7 + dodged // 10
+
             road_speed = 5 + dodged // 10
+        # ENEMY 2 RESET
 
         if thing2_starty > display_height:
-
             thing2_starty = -400
-
             thing2_startx = random.randrange(
                 road_left,
                 road_right - enemy_width
             )
-
-            while abs(thing2_startx - thing_startx) < enemy_width + 50:
+            while abs(
+                thing2_startx - thing_startx
+            ) < enemy_width + 50:
 
                 thing2_startx = random.randrange(
                     road_left,
                     road_right - enemy_width
                 )
-
             dodged += 1
+        # BOUNDARY COLLISION
+        if (
+            x > display_width-car_width
+            or x < 0
+        ):
+            crash(dodged)
 
-            thing2_speed = 7 + dodged // 10
+            return
+        # ENEMY 1 COLLISION
+        if y < thing_starty + enemy_height:
+            if (
+                x > thing_startx
+                and
+                x < thing_startx + enemy_width
+                or
+                x + car_width > thing_startx
+                and
+                x + car_width <
+                thing_startx + enemy_width
+            ):
+                print("x crossover")
+                print(
+                    "Player Top:",
+                    y
+                )
+                print(
+                    "Player Bottom:",
+                    y + 150
+                )
+                print(
+                    "Enemy Top:",
+                    thing_starty
+                )
+                print(
+                    "Enemy Bottom:",
+                    thing_starty + enemy_height
+                )
+                print(
+                    "Speed of Car:",
+                    thing_speed
+                )
+                crash(dodged)
+                return
+        # ENEMY 2 COLLISION
+        if y < thing2_starty + enemy_height:
 
+
+            if (
+                x > thing2_startx
+                and
+                x < thing2_startx + enemy_width
+                or
+                x + car_width > thing2_startx
+                and
+                x + car_width <
+                thing2_startx + enemy_width
+            ):
+                print(
+                    "x crossover - Enemy 2"
+                )
+                print(
+                    "Player Top:",
+                    y
+                )
+                print(
+                    "Player Bottom:",
+                    y + 150
+                )
+                print(
+                    "Enemy 2 Top:",
+                    thing2_starty
+                )
+                print(
+                    "Enemy 2 Bottom:",
+                    thing2_starty + enemy_height
+                )
+                print(
+                    "Speed of Car:",
+                    thing2_speed
+                )
+                print("*******************************")
+
+
+                crash(dodged)
+                return
+
+        # DISPLAY
         pygame.display.update()
-        clock.tick(60)
 
+        clock.tick(60)
+# START GAME
 
 while True:
-    game_loop()
 
+    game_loop()
+# CLEANUP
+
+camera_running = False
+cap.release()
+landmarker.close()
 pygame.quit()
 quit()
